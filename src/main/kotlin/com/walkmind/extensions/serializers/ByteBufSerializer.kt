@@ -330,7 +330,10 @@ interface ByteBufSerializer<T> : ByteBufEncoder<T>, ByteBufDecoder<T> {
         val utf8 = StringSerializer(Charsets.UTF_8)
 
         @JvmField
-        val utf8Sized = SizedUtf8Serializer(int32)
+        val utf8Sized = SizedStringSerializer(int32, Charsets.UTF_8)
+
+        @JvmField
+        val latin1CString = CStringSerializer(Charsets.ISO_8859_1)
 
         @JvmField
         val byteArray: ByteBufSerializer<ByteArray> = object : ByteBufSerializer<ByteArray> {
@@ -759,7 +762,7 @@ class SizedSerializer<T>(private val sizeSer: ByteBufSerializer<Int>, private va
     override val name: String = "Sized(${sizeSer.name}, ${itemSer.name})"
 }
 
-class SizedUtf8Serializer(private val sizeSer: ByteBufSerializer<Int>) : ByteBufSerializer<String> {
+class SizedStringSerializer(private val sizeSer: ByteBufSerializer<Int>, private val charset: Charset) : ByteBufSerializer<String> {
 
     init {
         require(sizeSer.isBounded) { "${sizeSer.name} is not bounded" }
@@ -767,15 +770,34 @@ class SizedUtf8Serializer(private val sizeSer: ByteBufSerializer<Int>) : ByteBuf
 
     override fun encode(value: String, out: ByteBuf) {
         sizeSer.encode(ByteBufUtil.utf8Bytes(value), out)
-        out.writeCharSequence(value, Charsets.UTF_8)
+        out.writeCharSequence(value, charset)
     }
 
     override fun decode(input: ByteBuf): String {
-        return input.readCharSequence(sizeSer.decode(input), Charsets.UTF_8).toString()
+        return input.readCharSequence(sizeSer.decode(input), charset).toString()
     }
 
     override val isBounded = true
-    override val name: String = "SizedUtf8(${sizeSer.name})"
+    override val name: String = "SizedString(${sizeSer.name}, $charset)"
+}
+
+class CStringSerializer(private val charset: Charset) : ByteBufSerializer<String> {
+
+    override fun encode(value: String, out: ByteBuf) {
+        out.writeCharSequence(value, charset)
+        out.writeByte(0)
+    }
+
+    override fun decode(input: ByteBuf): String {
+        for (i in 0 until input.readableBytes())
+            if (input.getByte(i + input.readerIndex()) == 0.toByte())
+                return input.readCharSequence(i + 1, charset).toString()
+
+        return input.readCharSequence(input.readableBytes(), charset).toString()
+    }
+
+    override val isBounded = true
+    override val name: String = "CString($charset)"
 }
 
 class EncryptedSerializer<T>(
