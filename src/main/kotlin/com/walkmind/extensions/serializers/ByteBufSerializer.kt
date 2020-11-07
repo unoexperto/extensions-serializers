@@ -784,6 +784,7 @@ class SizedStringSerializer(private val sizeSer: ByteBufSerializer<Int>, private
 class CStringSerializer(private val charset: Charset) : ByteBufSerializer<String> {
 
     override fun encode(value: String, out: ByteBuf) {
+        assert(!value.contains(0.toChar())) { "Input string contains zero character: $value" }
         out.writeCharSequence(value, charset)
         out.writeByte(0)
     }
@@ -791,7 +792,7 @@ class CStringSerializer(private val charset: Charset) : ByteBufSerializer<String
     override fun decode(input: ByteBuf): String {
         for (i in 0 until input.readableBytes())
             if (input.getByte(i + input.readerIndex()) == 0.toByte())
-                return input.readCharSequence(i + 1, charset).toString()
+                return input.readCharSequence(i, charset).toString()
 
         return input.readCharSequence(input.readableBytes(), charset).toString()
     }
