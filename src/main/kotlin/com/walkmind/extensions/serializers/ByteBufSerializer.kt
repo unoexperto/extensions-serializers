@@ -791,8 +791,11 @@ class CStringSerializer(private val charset: Charset) : ByteBufSerializer<String
 
     override fun decode(input: ByteBuf): String {
         for (i in 0 until input.readableBytes())
-            if (input.getByte(i + input.readerIndex()) == 0.toByte())
-                return input.readCharSequence(i, charset).toString()
+            if (input.getByte(i + input.readerIndex()) == 0.toByte()) {
+                val charSequence = input.readCharSequence(i, charset)
+                input.readerIndex(input.readerIndex() + 1)
+                return charSequence.toString()
+            }
 
         return input.readCharSequence(input.readableBytes(), charset).toString()
     }
