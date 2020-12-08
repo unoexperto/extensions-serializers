@@ -24,13 +24,13 @@ inline fun <R> ByteBuf.use(block: (ByteBuf) -> R): R {
     }
 }
 
-interface ByteBufEncoder<in T> {
+interface ByteBufEncoder<in T>: Encoder<T, ByteArray>  {
     fun encode(value: T, out: ByteBuf)
     val isBounded: Boolean
     val name: String
 
     @JvmDefault
-    fun encode(value: T): ByteArray {
+    override fun encode(value: T): ByteArray {
         PooledByteBufAllocator.DEFAULT.heapBuffer().use { buf ->
             this@ByteBufEncoder.encode(value, buf)
             val res = ByteArray(buf.readableBytes())
@@ -50,13 +50,13 @@ interface ByteBufEncoder<in T> {
     }
 }
 
-interface ByteBufDecoder<out T> {
+interface ByteBufDecoder<out T>: Decoder<T, ByteArray> {
     fun decode(input: ByteBuf): T
     val isBounded: Boolean
     val name: String
 
     @JvmDefault
-    fun decode(input: ByteArray): T {
+    override fun decode(input: ByteArray): T {
         return this@ByteBufDecoder.decode(Unpooled.wrappedBuffer(input))
     }
 
@@ -71,7 +71,7 @@ interface ByteBufDecoder<out T> {
     }
 }
 
-interface ByteBufSerializer<T> : ByteBufEncoder<T>, ByteBufDecoder<T> {
+interface ByteBufSerializer<T> : ByteBufEncoder<T>, ByteBufDecoder<T>, Serializer<T, ByteArray> {
 
     @JvmDefault
     fun <V> bimap(name: String, enc: (V) -> T, dec: (T) -> V): ByteBufSerializer<V> = object : ByteBufSerializer<V> {
@@ -375,10 +375,10 @@ interface ByteBufSerializer<T> : ByteBufEncoder<T>, ByteBufDecoder<T> {
         val bigDecimal: ByteBufSerializer<BigDecimal> = BigDecimalSerializer()
 
         @JvmField
-        val instant64 = long64.bimap("Instant64", Instant::toEpochMilli, { millis -> Instant.ofEpochMilli(millis) })
+        val instant64 = long64.bimap("Instant64", Instant::toEpochMilli, Instant::ofEpochSecond)
 
         @JvmField
-        val instant64L = long64L.bimap("Instant64L", Instant::toEpochMilli, { millis -> Instant.ofEpochMilli(millis) })
+        val instant64L = long64L.bimap("Instant64L", Instant::toEpochMilli, Instant::ofEpochMilli)
 
         private class InstantSerializer96(private val long64ser: ByteBufSerializer<Long>, private val int32ser: ByteBufSerializer<Int>) : ByteBufSerializer<Instant> {
             override fun encode(value: Instant, out: ByteBuf) {
@@ -430,6 +430,22 @@ interface ByteBufSerializer<T> : ByteBufEncoder<T>, ByteBufDecoder<T> {
         val localDateTime96L: ByteBufSerializer<LocalDateTime> = LocalDateTimeSerializer(instant96L)
 
         @JvmField
+        val localTime: ByteBufSerializer<LocalTime> = object : ByteBufSerializer<LocalTime> {
+            override fun encode(value: LocalTime, out: ByteBuf) {
+                out.writeByte(value.hour)
+                out.writeByte(value.minute)
+                out.writeByte(value.second)
+                out.writeInt(value.nano)
+            }
+
+            override fun decode(input: ByteBuf): LocalTime =
+                    LocalTime.of(input.readByte().toInt(), input.readByte().toInt(), input.readByte().toInt(), input.readInt())
+
+            override val isBounded: Boolean = true
+            override val name: String = "LocalTime"
+        }
+
+        @JvmField
         val localDate = long64.bimap("LocalDate", LocalDate::toEpochDay, LocalDate::ofEpochDay)
 
         @JvmField
@@ -464,10 +480,10 @@ interface ByteBufSerializer<T> : ByteBufEncoder<T>, ByteBufDecoder<T> {
                 }
 
                 override fun decode(input: ByteBuf): T? {
-                    if (input.readBoolean())
-                        return serializer.decode(input)
+                    return if (input.readBoolean())
+                        serializer.decode(input)
                     else
-                        return null
+                        null
                 }
 
                 override val isBounded: Boolean = serializer.isBounded
