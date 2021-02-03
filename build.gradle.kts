@@ -28,7 +28,7 @@ val publicationName = "DefaultPublication"
 
 project.group = "com.walkmind.extensions"
 val artifactID = "serializers"
-project.version = "1.4"
+project.version = "1.5"
 val licenseName = "Apache-2.0"
 val licenseUrl = "http://opensource.org/licenses/apache-2.0"
 val repoHttpsUrl = "https://github.com/unoexperto/extensions-serializers.git"
@@ -93,7 +93,34 @@ fun MavenPom.addDependencies() = withXml {
 }
 
 publishing {
+    repositories {
+        maven {
+//            name = "GitHubPackages"
+            url = uri("s3://walkmind-maven/")
+//            url = uri("https://maven.pkg.github.com/unoexperto/maven/")
+            credentials(AwsCredentials::class) {
+                val awsCreds = File(System.getProperty("user.home") + "/.aws/credentials")
+                        .readLines()
+                        .map { it.trim() }.filter { it.isNotEmpty() && it.first() != '[' && it.last() != ']' && it.contains("=") }
+                        .map {
+                            val (k, v) = it.split("=").map { it.trim() }
+                            k.toLowerCase() to v
+                        }
+                        .toMap()
+
+                accessKey = awsCreds["aws_access_key_id"]
+                secretKey = awsCreds["aws_secret_access_key"]
+//                sessionToken = "someSTSToken" // optional
+            }
+//            credentials {
+//                username = "unoexperto"
+//                password = "xxxx"
+//            }
+        }
+    }
+
     publications {
+
         create(publicationName, MavenPublication::class) {
             artifactId = artifactID
             groupId = project.group.toString()
