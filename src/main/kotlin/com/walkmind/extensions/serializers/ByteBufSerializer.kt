@@ -758,6 +758,7 @@ class SizedSerializer<T>(private val sizeSer: ByteBufSerializer<Int>, private va
 
     override fun decode(input: ByteBuf): T {
         val size = sizeSer.decode(input)
+        check(input.readableBytes() < size) { "Not enough data to decode sized object." }
         val readValue = itemSer.decode(input.slice(input.readerIndex(), size))
         input.readerIndex(input.readerIndex() + size)
         return readValue
