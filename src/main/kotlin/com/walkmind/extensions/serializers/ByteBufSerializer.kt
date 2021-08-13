@@ -29,7 +29,6 @@ interface ByteBufEncoder<in T>: Encoder<T, ByteArray>  {
     val isBounded: Boolean
     val name: String
 
-    @JvmDefault
     override fun encode(value: T): ByteArray {
         PooledByteBufAllocator.DEFAULT.heapBuffer().use { buf ->
             this@ByteBufEncoder.encode(value, buf)
@@ -39,7 +38,6 @@ interface ByteBufEncoder<in T>: Encoder<T, ByteArray>  {
         }
     }
 
-    @JvmDefault
     fun <V> mapEncoder(name: String, enc: (V) -> T): ByteBufEncoder<V> = object : ByteBufEncoder<V> {
         override fun encode(value: V, out: ByteBuf) {
             return this@ByteBufEncoder.encode(enc(value), out)
@@ -55,12 +53,10 @@ interface ByteBufDecoder<out T>: Decoder<T, ByteArray> {
     val isBounded: Boolean
     val name: String
 
-    @JvmDefault
     override fun decode(input: ByteArray): T {
         return this@ByteBufDecoder.decode(Unpooled.wrappedBuffer(input))
     }
 
-    @JvmDefault
     fun <V> mapDecoder(name: String, dec: (T) -> V): ByteBufDecoder<V> = object : ByteBufDecoder<V> {
         override fun decode(input: ByteBuf): V {
             return dec(this@ByteBufDecoder.decode(input))
@@ -73,7 +69,6 @@ interface ByteBufDecoder<out T>: Decoder<T, ByteArray> {
 
 interface ByteBufSerializer<T> : ByteBufEncoder<T>, ByteBufDecoder<T>, Serializer<T, ByteArray> {
 
-    @JvmDefault
     fun <V> bimap(name: String, enc: (V) -> T, dec: (T) -> V): ByteBufSerializer<V> = object : ByteBufSerializer<V> {
         override fun encode(value: V, out: ByteBuf) {
             return this@ByteBufSerializer.encode(enc(value), out)

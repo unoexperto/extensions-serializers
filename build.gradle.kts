@@ -11,7 +11,7 @@ import java.util.Properties
 val kotlinVersion = plugins.getPlugin(KotlinPluginWrapper::class.java).kotlinPluginVersion
 
 plugins {
-    kotlin("jvm") version "1.4.10"
+    kotlin("jvm") version "1.5.30-RC"
     id("java")
     idea
     id("com.github.johnrengelman.shadow") version "5.2.0"
@@ -33,40 +33,15 @@ val licenseName = "Apache-2.0"
 val licenseUrl = "http://opensource.org/licenses/apache-2.0"
 val repoHttpsUrl = "https://github.com/unoexperto/extensions-serializers.git"
 val repoSshUri = "git@github.com:unoexperto/extensions-serializers.git"
-val (bintrayUser, bintrayKey) = loadBintrayCredentials()
 
-fun loadBintrayCredentials(): Pair<String, String> {
-    val path = "${System.getProperty("user.home")}/.bintray/.credentials"
-    val fis = FileInputStream(path)
-    val prop = Properties()
-    prop.load(fis)
-    return prop.getProperty("user") to prop.getProperty("password")
-}
-
-bintray {
-    user = bintrayUser
-    key = bintrayKey
-    publish = true
-//    dryRun = true
-
-    setPublications(publicationName)
-
-    pkg(delegateClosureOf<BintrayExtension.PackageConfig> {
-        repo = "maven"
-        name = "extensions-serializers"
-        userOrg = "cppexpert"
-        setLicenses(licenseName)
-        vcsUrl = repoHttpsUrl
-        setLabels("kotlin")
-
-        version(delegateClosureOf<BintrayExtension.VersionConfig> {
-            name = project.version as? String
-            released = Date().toString()
-            desc = project.description
-//            attributes = mapOf("attrName" to "attrValue")
-        })
-    })
-}
+val awsCreds = File(System.getProperty("user.home") + "/.aws/credentials")
+    .readLines()
+    .map { it.trim() }.filter { it.isNotEmpty() && it.first() != '[' && it.last() != ']' && it.contains("=") }
+    .map {
+        val (k, v) = it.split("=").map { it.trim() }
+        k.toLowerCase() to v
+    }
+    .toMap()
 
 val sourcesJar by tasks.creating(Jar::class) {
     archiveClassifier.set("sources")
@@ -96,17 +71,9 @@ publishing {
     repositories {
         maven {
 //            name = "GitHubPackages"
-            url = uri("s3://walkmind-maven/")
+            url = uri("s3://${awsCreds["maven_bucket"]!!}/")
 //            url = uri("https://maven.pkg.github.com/unoexperto/maven/")
             credentials(AwsCredentials::class) {
-                val awsCreds = File(System.getProperty("user.home") + "/.aws/credentials")
-                        .readLines()
-                        .map { it.trim() }.filter { it.isNotEmpty() && it.first() != '[' && it.last() != ']' && it.contains("=") }
-                        .map {
-                            val (k, v) = it.split("=").map { it.trim() }
-                            k.toLowerCase() to v
-                        }
-                        .toMap()
 
                 accessKey = awsCreds["aws_access_key_id"]
                 secretKey = awsCreds["aws_secret_access_key"]
@@ -221,8 +188,8 @@ tasks {
                 "-XXLanguage:+NewInference",
                 "-Xinline-classes",
                 "-Xjvm-default=enable")
-        kotlinOptions.apiVersion = "1.3"
-        kotlinOptions.languageVersion = "1.3"
+        kotlinOptions.apiVersion = "1.5"
+        kotlinOptions.languageVersion = "1.5"
     }
 
     withType<Test>().all {
@@ -238,7 +205,7 @@ tasks {
     }
 
     withType<Wrapper>().all {
-        gradleVersion = "6.4.1"
+        gradleVersion = "7.1"
         distributionType = Wrapper.DistributionType.BIN
     }
 
