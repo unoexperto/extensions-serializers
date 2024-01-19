@@ -1,47 +1,75 @@
-//import com.github.jengelman.gradle.plugins.shadow.ShadowApplicationPlugin
-//import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.gradle.api.publish.maven.MavenPom
 import org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapper
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import com.jfrog.bintray.gradle.BintrayExtension
 import java.util.Date
 import java.io.FileInputStream
 import java.util.Properties
+import java.util.concurrent.atomic.AtomicReference
 
-val kotlinVersion = plugins.getPlugin(KotlinPluginWrapper::class.java).kotlinPluginVersion
+object Versions {
+    val java = JavaVersion.VERSION_17 // can't go higher than 17 because of shadowJar
+
+    const val kotlin = "1.9.22"
+
+    const val levelDb = "1.8" // https://mvnrepository.com/artifact/org.fusesource.leveldbjni/leveldbjni-all
+    const val rocksDb = "8.9.1" // https://mvnrepository.com/artifact/org.rocksdb/rocksdbjni
+    const val nettyBuffer = "4.1.105.Final" // https://mvnrepository.com/artifact/io.netty/netty-buffer
+
+    const val junitJupiter = "5.10.1" // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
+    const val jqwik = "1.8.2" // https://mvnrepository.com/artifact/net.jqwik/jqwik
+}
 
 plugins {
-    kotlin("jvm") version "1.5.30-RC"
+    kotlin("jvm") version "1.9.22"
     id("java")
     idea
-    id("com.github.johnrengelman.shadow") version "5.2.0"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
     id("maven-publish")
-    id("com.jfrog.bintray") version "1.8.4"
     `java-library`
 }
 
-kotlin {
-    //    experimental.coroutines = Coroutines.ENABLE
-}
+project.group = "com.walkmind.extensions"
+project.version = "1.8"
 
 val publicationName = "DefaultPublication"
-
-project.group = "com.walkmind.extensions"
 val artifactID = "serializers"
-project.version = "1.6"
 val licenseName = "Apache-2.0"
 val licenseUrl = "http://opensource.org/licenses/apache-2.0"
 val repoHttpsUrl = "https://github.com/unoexperto/extensions-serializers.git"
 val repoSshUri = "git@github.com:unoexperto/extensions-serializers.git"
 
 val awsCreds = File(System.getProperty("user.home") + "/.aws/credentials")
-    .readLines()
-    .map { it.trim() }.filter { it.isNotEmpty() && it.first() != '[' && it.last() != ']' && it.contains("=") }
-    .map {
-        val (k, v) = it.split("=").map { it.trim() }
-        k.toLowerCase() to v
+    .let {
+
+        if (it.exists())
+            it.readLines()
+                .map {
+                    val commentPos = it.indexOf('#')
+                    if (commentPos >= 0) {
+                        it.substring(0, commentPos).trim()
+                    } else
+                        it.trim()
+                }
+                .filter { it.isNotEmpty() }
+                .fold(mutableMapOf<String, MutableMap<String, String>>() to AtomicReference<String>()) { (acc, cur), s ->
+
+                    if (s.startsWith("[") && s.endsWith("]")) {
+                        cur.set(s.substring(1, s.length - 1))
+                    } else
+                        if (s.contains("=")) {
+                            check(cur.get() != null)
+                            val items = acc.computeIfAbsent(cur.get()) { mutableMapOf<String, String>() }
+                            val (k, v) = s.split("=").map { it.trim() }
+                            items[k.toLowerCase()] = v
+                        }
+
+                    acc to cur
+                }
+                .first
+        else
+            emptyMap()
     }
-    .toMap()
+    .get("bp")!!
 
 val sourcesJar by tasks.creating(Jar::class) {
     archiveClassifier.set("sources")
@@ -70,19 +98,12 @@ fun MavenPom.addDependencies() = withXml {
 publishing {
     repositories {
         maven {
-//            name = "GitHubPackages"
             url = uri("s3://${awsCreds["maven_bucket"]!!}/")
-//            url = uri("https://maven.pkg.github.com/unoexperto/maven/")
             credentials(AwsCredentials::class) {
 
                 accessKey = awsCreds["aws_access_key_id"]
                 secretKey = awsCreds["aws_secret_access_key"]
-//                sessionToken = "someSTSToken" // optional
             }
-//            credentials {
-//                username = "unoexperto"
-//                password = "xxxx"
-//            }
         }
     }
 
@@ -136,25 +157,23 @@ idea {
 }
 
 dependencies {
-    implementation(kotlin("stdlib-jdk8", kotlinVersion))
-    implementation(kotlin("reflect", kotlinVersion))
+    implementation(kotlin("stdlib", Versions.kotlin))
 
-    compileOnly("org.fusesource.leveldbjni:leveldbjni-all:1.8")
-    compileOnly("org.rocksdb:rocksdbjni:6.8.1")
-    compileOnly("io.netty:netty-buffer:4.1.50.Final")
+    compileOnly("org.fusesource.leveldbjni:leveldbjni-all:${Versions.levelDb}")
+    compileOnly("org.rocksdb:rocksdbjni:${Versions.rocksDb}")
+    compileOnly("io.netty:netty-buffer:${Versions.nettyBuffer}")
 
-    testImplementation(kotlin("test-junit5", kotlinVersion))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.6.2")
-    testImplementation("net.jqwik:jqwik:1.3.0")
-    testImplementation("org.fusesource.leveldbjni:leveldbjni-all:1.8")
-    testImplementation("org.rocksdb:rocksdbjni:6.8.1")
-    testImplementation("io.netty:netty-buffer:4.1.50.Final")
+    testImplementation(kotlin("test-junit5", Versions.kotlin))
+    testImplementation("org.junit.jupiter:junit-jupiter:${Versions.junitJupiter}")
+    testImplementation("net.jqwik:jqwik:${Versions.jqwik}")
+    testImplementation("org.fusesource.leveldbjni:leveldbjni-all:${Versions.levelDb}")
+    testImplementation("org.rocksdb:rocksdbjni:${Versions.rocksDb}")
+    testImplementation("io.netty:netty-buffer:${Versions.nettyBuffer}")
 }
 
 repositories {
     mavenCentral()
     jcenter()
-    maven ("https://dl.bintray.com/kotlin/kotlin-eap")
     maven ("https://repo.spring.io/snapshot")
     maven ("https://repo.spring.io/release")
     flatDir {
@@ -168,48 +187,42 @@ configurations {
     }
 }
 
-//sourceSets {
-//    main {
-//        java.srcDir("src/core/java")
-//    }
-//}
-
 java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = Versions.java
+    targetCompatibility = Versions.java
 }
 
 tasks {
     withType<KotlinCompile> {
-        kotlinOptions.jvmTarget = "1.8"
+        // https://github.com/JetBrains/kotlin/blob/master/compiler/util/src/org/jetbrains/kotlin/config/LanguageVersionSettings.kt
         kotlinOptions.freeCompilerArgs = listOf(
-                "-Xjsr305=strict",
-                "-Xjvm-default=enable",
-                "-XXLanguage:+NewInference",
-                "-Xinline-classes",
-                "-Xjvm-default=enable")
-        kotlinOptions.apiVersion = "1.5"
-        kotlinOptions.languageVersion = "1.5"
+            "-Xextended-compiler-checks",
+            "-Xjsr305=strict",
+            "-Xjvm-default=all",
+            "-Xinline-classes",
+            "-opt-in=kotlin.ExperimentalStdlibApi",
+            "-opt-in=kotlin.RequiresOptIn",
+            "-opt-in=kotlin.contracts.ExperimentalContracts",
+            "-opt-in=kotlin.io.path.ExperimentalPathApi",
+            "-opt-in=kotlin.js.ExperimentalJsExport",
+            "-opt-in=kotlin.time.ExperimentalTime",
+            "-opt-in=kotlin.ExperimentalUnsignedTypes",
+            "-Xskip-prerelease-check",
+        )
+        kotlinOptions.apiVersion = "1.9"
+        kotlinOptions.languageVersion = "1.9"
+        kotlinOptions.jvmTarget = Versions.java.toString()
     }
 
     withType<Test>().all {
-//        jvmArgs = listOf("--enable-preview")
         testLogging.showStandardStreams = true
         testLogging.showExceptions = true
         useJUnitPlatform {
         }
     }
 
-    withType<JavaExec>().all {
-//        jvmArgs = listOf("--enable-preview")
-    }
-
     withType<Wrapper>().all {
-        gradleVersion = "7.1"
+        gradleVersion = "8.5"
         distributionType = Wrapper.DistributionType.BIN
-    }
-
-    withType<JavaCompile>().all {
-//        options.compilerArgs.addAll(listOf("--enable-preview", "-Xlint:preview"))
     }
 }
