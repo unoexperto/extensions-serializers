@@ -2,6 +2,7 @@
 
 package com.walkmind.extensions.serializers
 
+import com.walkmind.extensions.bytebuf.use
 import com.walkmind.extensions.misc.ObjectPool
 import com.walkmind.extensions.misc.use
 import io.netty.buffer.ByteBuf
@@ -13,16 +14,6 @@ import java.math.BigInteger
 import java.nio.charset.Charset
 import java.time.*
 import javax.crypto.Cipher
-
-inline fun <R> ByteBuf.use(block: (ByteBuf) -> R): R {
-    try {
-        return block(this)
-    } catch (e: Throwable) {
-        throw e
-    } finally {
-        this.release()
-    }
-}
 
 interface ByteBufEncoder<in T>: Encoder<T, ByteArray>  {
     fun encode(value: T, out: ByteBuf)

@@ -23,13 +23,13 @@ plugins {
     kotlin("jvm") version "1.9.22"
     id("java")
     idea
-    id("com.github.johnrengelman.shadow") version "8.1.1"
     id("maven-publish")
     `java-library`
 }
 
 project.group = "com.walkmind.extensions"
-project.version = "1.8"
+project.version = "1.9"
+//project.version = "1.9-SNAPSHOT"
 
 val publicationName = "DefaultPublication"
 val artifactID = "serializers"
